@@ -44,14 +44,6 @@
         }
     }
     
-    ActiveRecord.Error = function( msg ) {
-        this.message = msg;
-    }
-    
-    ActiveRecord.Error.prototype = new Error();
-    ActiveRecord.Error.prototype.constructor = ActiveRecord.Error;
-    ActiveRecord.Error.prototype.name = 'ActiveRecord.Error';
-    
     ActiveRecord.Storage = function() {
         return new ActiveRecord.Storage.fn.init();
     }
@@ -192,7 +184,7 @@
         create: function( type, schemata, relations ) {
             
             if (this.has(type)) {
-                throw new ActiveRecord.Error('a model of that type already exists in this storage.');
+                throw new Error('a model of that type already exists in this storage.');
             }
             
             var model = new ActiveRecord.Model(type, schemata, relations);
@@ -276,11 +268,11 @@
         init: function( type, schemata, relations ) {
             
             if (typeof type !== 'string') {
-                throw new ActiveRecord.Error('type must be of type string.');
+                throw new Error('type must be of type string.');
             }
             
             if (typeof schemata != 'object') {
-                throw new ActiveRecord.Error('invalid model schemata given.');
+                throw new Error('invalid model schemata given.');
             }
             
             this.type = type.toLowerCase();
@@ -374,12 +366,12 @@
                                     
                                     break;
                                 default:
-                                    throw new ActiveRecord.Error('cannot use "in" operator here.');
+                                    throw new Error('cannot use "in" operator here.');
                             }
                             
                             break;
                         default:
-                            throw new ActiveRecord.Error('invalid operator.');
+                            throw new Error('invalid operator.');
                     }
                 }
             }
@@ -492,7 +484,7 @@
             }
             
             if (validationErrors.length > 0) {
-                throw new ActiveRecord.Error('\n\t- ' + validationErrors.join('\n\t- '));
+                throw new Error('\n\t- ' + validationErrors.join('\n\t- '));
             }
             
             return true;

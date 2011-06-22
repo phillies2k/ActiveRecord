@@ -14,6 +14,7 @@
         var _guid = 0;
         return (function(o) {
             if (!o.__uuid__) {
+                for (var p in o) 
                 var id = (new Date()).getTime() + '_' + (++_guid);
                 o.__defineGetter__('__uuid__', function(){
                     this.__proto__ = {
@@ -39,13 +40,35 @@
         HAS_MANY:                   3,
         HAS_ONE:                    4,
         
+        settings: {
+            syncUrl: null,
+            syncMode: 0,
+            sync: false,
+            user: null,
+            pass: null,
+            params: null
+        },
+        
+        Storage: function() {
+            return new ActiveRecord.Storage.fn.init();
+        },
+        
+        DB: function( db ) {
+            return new ActiveRecord.DB.fn.init(db);
+        },
+        
+        Model: function( type, schemata ) {
+            return new ActiveRecord.Model.fn.init(type, schemata);
+        },
+        
         init: function( db, options ) {
-            return new ActiveRecord.fn.init(db, options);
+            
+            for (var opt in options) {
+                this.settings[opt] = options[opt];
+            }
+            
+            return new ActiveRecord.fn.init(db);
         }
-    }
-    
-    ActiveRecord.Storage = function() {
-        return new ActiveRecord.Storage.fn.init();
     }
     
     ActiveRecord.Storage.fn = ActiveRecord.Storage.prototype = {
@@ -76,32 +99,13 @@
     
     ActiveRecord.Storage.fn.init.prototype = ActiveRecord.Storage.fn;
     
-    ActiveRecord.DB = function( db ) {
-        return new ActiveRecord.DB.fn.init(db);
-    }
-    
-    ActiveRecord.Model = function( type, schemata, relations ) {
-        return new ActiveRecord.Model.fn.init(type, schemata, relations);
-    }
-    
     ActiveRecord.fn = ActiveRecord.prototype = {
         constructor: ActiveRecord,
         
-        settings: {
-            syncUrl: null,
-            syncMode: 0,
-            sync: false,
-            user: null,
-            pass: null,
-            params: null
-        },
-        
         db: null,
         
-        init: function( db, options ) {
-            
+        init: function( db ) {
             this.db = new ActiveRecord.DB(db);
-            
             return this;
         },
         
@@ -117,10 +121,6 @@
             return this.db.has(type);
         },
         
-        commit: function( model ) {
-            return this.db.commit(model);
-        },
-        
         clear: function( type ) {
             return this.db.clear(type);
         },
@@ -129,8 +129,8 @@
             return this.db.destroy(type);
         },
         
-        create: function( type, schemata, relations ) {
-            return this.db.create(type, schemata, relations);
+        create: function( type, schemata ) {
+            return this.db.create(type, schemata);
         },
         
         persist: function( model ) {
@@ -167,7 +167,6 @@
             
             $storage.setItem( this.storage + '.' + type, JSON.stringify([
                 model.getSchemata(),
-                model.getRelations(),
                 {}
             ]));
         },
@@ -181,13 +180,13 @@
             return !!$storage.getItem( this.storage + '.' + type );
         },
         
-        create: function( type, schemata, relations ) {
+        create: function( type, schemata ) {
             
             if (this.has(type)) {
                 throw new Error('a model of that type already exists in this storage.');
             }
             
-            var model = new ActiveRecord.Model(type, schemata, relations);
+            var model = new ActiveRecord.Model(type, schemata);
             this.persist(model);
             this.repositories[ type ] = model;
             
@@ -200,10 +199,10 @@
                 
                 if (!this.repositories[ type ]) {
                     var raw = JSON.parse($storage.getItem( this.storage + '.' + type )),
-                        model = new ActiveRecord.Model(type, raw[0], raw[1]), uuid;
+                        model = new ActiveRecord.Model(type, raw[0]), uuid;
                     
-                    for (uuid in raw[2]) {
-                        model.add(raw[2][uuid]);
+                    for (uuid in raw[1]) {
+                        model.add(raw[1][uuid]);
                     }
                     
                     this.repositories[ type ] = model;
@@ -222,15 +221,15 @@
                 repo = this.storage + '.' + model.type,
                 uuid , dump = $storage.getItem(repo);
             
-            dump = dump ? JSON.parse(dump) : [ model.getSchemata(), model.getRelations(), {}];
+            dump = dump ? JSON.parse(dump) : [ model.getSchemata(), {} ];
             
             for (uuid in added) {
-                dump[2][uuid] = added[uuid];
+                dump[1][uuid] = added[uuid];
             }
             
             for (uuid in removed) {
-                if (dump[2][uuid]) {
-                    delete dump[2][uuid];
+                if (dump[1][uuid]) {
+                    delete dump[1][uuid];
                 }
             }
             
@@ -253,19 +252,26 @@
             __uuid__: true
         },
         
+        magicProperties: {
+            __belongsTo: true,
+            __belongsToAndHasMany: true,
+            __hasMany: true,
+            __hasOne: true
+        },
+        
         validation: true,
         
         addedObjects: null,
         
         removedObjects: null,
         
-        schemata: false,
+        schemata: {},
         
-        relations: false,
+        relations: {},
         
         type: false,
         
-        init: function( type, schemata, relations ) {
+        init: function( type, schemata ) {
             
             if (typeof type !== 'string') {
                 throw new Error('type must be of type string.');
@@ -276,8 +282,16 @@
             }
             
             this.type = type.toLowerCase();
-            this.schemata = schemata;
-            this.relations = relations || {};
+            
+            for (var prop in schemata) {
+                
+                if (prop in this.magicProperties) {
+                    this.relations[prop] = schemata[prop].split(/\s*,\s*/);
+                    continue;
+                }
+                
+                this.schemata[prop] = schemata[prop];
+            }
             
             this.addedObjects = new ActiveRecord.Storage;
             this.removedObjects = new ActiveRecord.Storage;
@@ -471,9 +485,34 @@
                     continue;
                 }
                 
-                if (typeof obj[prop] != this.schemata[prop].type) {
-                    validationErrors.push('model property "' + prop + '" must be of type ' + this.schemata[prop].type + ', ' + typeof obj[prop] + ' given.');
-                    continue;
+                switch (this.schemata[prop].type) {
+                    case 'datetime':
+                        if (typeof obj[prop] != 'string' || !/^\d{2,4}(\.|\/)\d{2}(\.|\/)\d{2,4} \d{2}\:\d{2}(\:\d{2})?$/.test(obj[prop])) {
+                            validationErrors.push('model property "' + prop + '" must be of type ' + this.schemata[prop].type + ', ' + typeof obj[prop] + ' given.');
+                            continue;
+                        }
+                        break;
+                    case 'time':
+                        if (typeof obj[prop] != 'string' || !/^\d{2}\:\d{2}(\:\d{2})?$/.test(obj[prop])) {
+                            validationErrors.push('model property "' + prop + '" must be of type ' + this.schemata[prop].type + ', ' + typeof obj[prop] + ' given.');
+                            continue;
+                        }
+                        break;
+                    case 'date':
+                        if (typeof obj[prop] != 'string' || !/^\d{2,4}(\.|\/)\d{2}(\.|\/)\d{2,4}$/.test(obj[prop])) {
+                            validationErrors.push('model property "' + prop + '" must be of type ' + this.schemata[prop].type + ', ' + typeof obj[prop] + ' given.');
+                            continue;
+                        }
+                        break;
+                    case 'string':
+                    case 'number':
+                    case 'boolean':
+                    case 'object':
+                        if (typeof obj[prop] != this.schemata[prop].type) {
+                            validationErrors.push('model property "' + prop + '" must be of type ' + this.schemata[prop].type + ', ' + typeof obj[prop] + ' given.');
+                            continue;
+                        }
+                        break;
                 }
                 
                 if (typeof this.schemata[prop].validate == 'function' &&

@@ -12,6 +12,7 @@
  */
 
 (function(){
+    'use strict';
     
     var H = {};
     
@@ -25,7 +26,7 @@
                 },
                 setter = function (val) {
                     oldval = newval;
-                    return newval = handler.call(this, prop, oldval, val);
+                    return (newval = handler.call(this, prop, oldval, val));
                 };
             
             if (delete this[prop]) { // can't watch constants
@@ -124,7 +125,7 @@
     window.$storage = window.localStorage = localStorage;
     window.ActiveRecord = window.$db = ActiveRecord = {
         
-        Version: '1.1.0',
+        Version: '1.2',
         
         SORT_ASC:   'asc',
         SORT_DESC:  'desc',

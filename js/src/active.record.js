@@ -1,10 +1,13 @@
 /*!
- * ActiveRecord v1.1
+ * ActiveRecord v1.2
  *
  * Copyright (c) 2011 Philipp Boes
- * https://github.com/phillies2k/active-record/
+ * https://github.com/phillies2k/ActiveRecord/
  * 
  * Licensed under the GPL License.
+ *
+ * Includes MD5 (Message-Digest Algorithm)
+ * http://www.webtoolkit.info/
  *
  */
 

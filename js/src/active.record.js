@@ -12,63 +12,6 @@
  */
 
 (function(){
-    'use strict';
-    
-    var H = {};
-    
-    if (!Object.prototype.watch) {
-        
-        Object.prototype.watch = function (prop, handler) {
-            
-            var oldval = this[prop], newval = oldval,
-                getter = function () {
-                    return newval;
-                },
-                setter = function (val) {
-                    oldval = newval;
-                    return (newval = handler.call(this, prop, oldval, val));
-                };
-            
-            if (delete this[prop]) { // can't watch constants
-                if (Object.defineProperty) // ECMAScript 5
-                    Object.defineProperty(this, prop, {
-                        get: getter,
-                        set: setter
-                    });
-                else if (Object.prototype.__defineGetter__ && Object.prototype.__defineSetter__) { // legacy
-                    Object.prototype.__defineGetter__.call(this, prop, getter);
-                    Object.prototype.__defineSetter__.call(this, prop, setter);
-                }
-            }
-        };
-    }
-    
-    if (!Object.prototype.unwatch) {
-        
-        Object.prototype.unwatch = function (prop) {
-            
-            var val = this[prop];
-            delete this[prop]; // remove accessors
-            this[prop] = val;
-        };
-    }
-    
-    Object.prototype.__defineGetter__('__uuid__', (function(){
-        H.gid = 0;
-        return function() {
-            var id = H.gid++;
-            this.__proto__ = {
-                __proto__: this.__proto__,
-                get __uuid__() { return id; },
-                set __uuid__() {}
-            }
-            return id;
-        }
-    })());
-    
-    Object.prototype.toString = function() {
-        return '[object #' + this.__uuid__ + ']';
-    }
     
     function serialize(obj) {
         var s = [], p,
@@ -174,6 +117,8 @@
         
         storage: null,
         
+        length: 0,
+        
         init: function() {
             this.storage = {};
         },
@@ -181,12 +126,14 @@
         attach: function( obj ) {
             if (!this.has(obj)) {
                 this.storage[ obj_hash(obj) ] = obj;
+                ++this.length;
             }
         },
         
         detach: function( obj ) {
             if (this.has(obj)) {
                 delete this.storage[ obj_hash(obj) ];
+                --this.length;
             }
         },
         
@@ -209,18 +156,10 @@
         
         settings: null,
         
-        activeObjects: 0,
-        
         init: function( db, options ) {
             
             this.settings = options;
             this.db = new ActiveRecord.DB(db);
-            
-            var self = this;
-            H.watch('gid', function(prop, oldVal, newVal){
-                self.activeObjects = newVal;
-                return newVal;
-            });
             
             return this;
         },
@@ -456,7 +395,9 @@
         constructor: ActiveRecord.Model,
         
         ignoredProperties: {
-            __uuid__: true
+            __uuid__: true,
+            watch: true,
+            unwatch: true
         },
         
         magicProperties: {
